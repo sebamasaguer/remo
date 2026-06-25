@@ -1,0 +1,22 @@
+# compiled output
+/dist
+/node_modules
+
+# env — NUNCA subir al repo
+.env
+
+# logs
+logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+
+# tests
+/coverage

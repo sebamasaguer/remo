@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./src:/app/src
+    command: npm run start:dev
+
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: remo_db
+      POSTGRES_USER: remo_user
+      POSTGRES_PASSWORD: remo_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U remo_user -d remo_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  pg_data:
+  redis_data:

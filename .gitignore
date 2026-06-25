@@ -1,0 +1,8 @@
+# env files con credenciales
+**/.env
+
+# dependencias
+**/node_modules
+
+# compiled
+**/dist
