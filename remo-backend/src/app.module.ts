@@ -8,6 +8,7 @@ import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 
 import { RedisModule } from './redis/redis.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 import { User } from './modules/users/entities/user.entity';
 import { Driver } from './modules/drivers/entities/driver.entity';
@@ -39,6 +40,7 @@ import { Trip } from './modules/trips/entities/trip.entity';
     }),
 
     RedisModule,
+    AuthModule,
   ],
 })
 export class AppModule {}
