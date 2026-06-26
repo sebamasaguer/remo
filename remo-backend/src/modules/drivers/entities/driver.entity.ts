@@ -42,7 +42,7 @@ export class Driver {
   remisera: Remisera;
 
   @Column({ name: 'remisera_id', nullable: true })
-  remeseraId: string;
+  remeseraId: string | undefined;
 
   @Column({ type: 'enum', enum: DriverType, default: DriverType.INDEPENDENT })
   type: DriverType;

@@ -9,6 +9,7 @@ import redisConfig from './config/redis.config';
 
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { DriversModule } from './modules/drivers/drivers.module';
 
 import { User } from './modules/users/entities/user.entity';
 import { Driver } from './modules/drivers/entities/driver.entity';
@@ -41,6 +42,7 @@ import { Trip } from './modules/trips/entities/trip.entity';
 
     RedisModule,
     AuthModule,
+    DriversModule,
   ],
 })
 export class AppModule {}
