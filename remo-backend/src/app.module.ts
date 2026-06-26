@@ -13,6 +13,8 @@ import { DriversModule } from './modules/drivers/drivers.module';
 import { TripsModule } from './modules/trips/trips.module';
 import { FaresModule } from './modules/fares/fares.module';
 import { GatewayModule } from './gateway/gateway.module';
+import { RatingsModule } from './modules/ratings/ratings.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 
 import { User } from './modules/users/entities/user.entity';
 import { Driver } from './modules/drivers/entities/driver.entity';
@@ -22,6 +24,8 @@ import { Remisera } from './modules/remiseras/entities/remisera.entity';
 import { Trip } from './modules/trips/entities/trip.entity';
 import { TripLocation } from './modules/trips/entities/trip-location.entity';
 import { FareConfig } from './modules/fares/entities/fare-config.entity';
+import { Rating } from './modules/ratings/entities/rating.entity';
+import { Payment } from './modules/payments/entities/payment.entity';
 
 @Module({
   imports: [
@@ -39,7 +43,11 @@ import { FareConfig } from './modules/fares/entities/fare-config.entity';
         database: config.get('database.name'),
         username: config.get('database.user'),
         password: config.get('database.pass'),
-        entities: [User, Driver, Vehicle, DriverDocument, Remisera, Trip, TripLocation, FareConfig],
+        entities: [
+          User, Driver, Vehicle, DriverDocument,
+          Remisera, Trip, TripLocation, FareConfig,
+          Rating, Payment,
+        ],
         synchronize: config.get('app.nodeEnv') === 'development',
         logging: config.get('app.nodeEnv') === 'development',
       }),
@@ -51,6 +59,8 @@ import { FareConfig } from './modules/fares/entities/fare-config.entity';
     DriversModule,
     FaresModule,
     TripsModule,
+    RatingsModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}
