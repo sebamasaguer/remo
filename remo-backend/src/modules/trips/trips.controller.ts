@@ -86,4 +86,11 @@ export class TripsController {
   ) {
     return this.tripsService.cancelByDriver(user.sub, id, dto);
   }
+
+  // Dev-only: simula que el conductor de prueba acepta el viaje
+  @Post(':id/dev-accept')
+  devAccept(@Param('id', ParseUUIDPipe) id: string) {
+    const TEST_DRIVER_ID = '41ab0532-42f9-4ecd-ae15-dafca36b72cf';
+    return this.tripsService.devAcceptTrip(id, TEST_DRIVER_ID);
+  }
 }

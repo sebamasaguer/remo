@@ -77,20 +77,31 @@ export class TripsService {
     const durationMin = Math.ceil((distanceKm / 30) * 60);
     const estimate = await this.faresService.estimate(distanceKm, durationMin);
 
-    const trip = this.tripRepository.create({
-      passengerId,
-      originAddress: dto.originAddress,
-      originCoords: `POINT(${dto.originLng} ${dto.originLat})` as any,
-      destinationAddress: dto.destinationAddress,
-      destinationCoords: `POINT(${dto.destinationLng} ${dto.destinationLat})` as any,
-      paymentMethod: dto.paymentMethod,
-      estimatedDistanceKm: distanceKm,
-      estimatedDurationMin: durationMin,
-      estimatedPrice: estimate.price,
-      status: TripStatus.REQUESTED,
-    });
+    const originLng = Number(dto.originLng);
+    const originLat = Number(dto.originLat);
+    const destLng = Number(dto.destinationLng);
+    const destLat = Number(dto.destinationLat);
 
-    await this.tripRepository.save(trip);
+    const result = await this.tripRepository
+      .createQueryBuilder()
+      .insert()
+      .into(Trip)
+      .values({
+        passengerId,
+        originAddress: dto.originAddress,
+        originCoords: () => `ST_SetSRID(ST_MakePoint(${originLng}, ${originLat}), 4326)`,
+        destinationAddress: dto.destinationAddress,
+        destinationCoords: () => `ST_SetSRID(ST_MakePoint(${destLng}, ${destLat}), 4326)`,
+        paymentMethod: dto.paymentMethod,
+        estimatedDistanceKm: distanceKm,
+        estimatedDurationMin: durationMin,
+        estimatedPrice: estimate.price,
+        status: TripStatus.REQUESTED,
+      })
+      .returning('id')
+      .execute();
+
+    const trip = await this.tripRepository.findOneOrFail({ where: { id: result.raw[0].id } });
 
     // Inicia el matching en background (no bloquea la respuesta HTTP)
     setImmediate(() => this.matchingService.startMatching(trip.id));
@@ -263,6 +274,46 @@ export class TripsService {
     if (trip.status !== expectedStatus) {
       throw new BadRequestException(`Estado inválido: el viaje está en ${trip.status}`);
     }
+
+    return trip;
+  }
+
+  // Dev: asigna directamente el conductor de prueba sin esperar socket
+  async devAcceptTrip(tripId: string, driverId: string): Promise<Trip> {
+    const driver = await this.driverRepository.findOne({
+      where: { id: driverId },
+      relations: ['user', 'vehicle'],
+    });
+    if (!driver) throw new NotFoundException('Conductor de prueba no encontrado');
+
+    const vehicle = driver.vehicle;
+
+    await this.tripRepository.update(tripId, {
+      driverId,
+      vehicleId: vehicle?.id,
+      status: TripStatus.ASSIGNED,
+      assignedAt: new Date(),
+    });
+
+    const trip = await this.findById(tripId);
+
+    this.gateway.emitToUser(trip.passengerId, 'trip:driver_assigned', {
+      tripId,
+      driver: {
+        id: driver.user.id,
+        name: driver.user.name,
+        rating: driver.user.ratingAvg,
+        lat: -24.7821,
+        lng: -65.4232,
+      },
+      vehicle: {
+        plate: vehicle?.plate,
+        brand: vehicle?.brand,
+        model: vehicle?.model,
+        color: vehicle?.color,
+      },
+      etaMinutes: 5,
+    });
 
     return trip;
   }

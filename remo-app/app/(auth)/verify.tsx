@@ -78,8 +78,8 @@ export default function VerifyScreen() {
           <Text style={{ fontWeight: '700', color: COLORS.text }}>{phone}</Text>
         </Text>
 
-        {/* Código visual */}
-        <TouchableOpacity onPress={() => inputRef.current?.focus()}>
+        {/* Código visual — toque abre teclado */}
+        <TouchableOpacity activeOpacity={1} onPress={() => inputRef.current?.focus()}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 40 }}>
             {Array.from({ length: CODE_LENGTH }).map((_, i) => (
               <View
@@ -111,7 +111,9 @@ export default function VerifyScreen() {
           }}
           keyboardType="number-pad"
           maxLength={CODE_LENGTH}
-          style={{ position: 'absolute', opacity: 0, height: 0 }}
+          autoFocus
+          caretHidden
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
         />
 
         {loading && <ActivityIndicator color={COLORS.primary} style={{ marginBottom: 16 }} />}

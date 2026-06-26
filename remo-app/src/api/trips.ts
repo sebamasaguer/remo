@@ -48,3 +48,6 @@ export const getMyTrips = (page = 1) =>
 
 export const getTrip = (tripId: string) =>
   api.get<Trip>(`/trips/${tripId}`);
+
+export const devAcceptTrip = (tripId: string) =>
+  api.post(`/trips/${tripId}/dev-accept`);

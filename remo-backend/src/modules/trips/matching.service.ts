@@ -61,23 +61,15 @@ export class MatchingService {
   // ─── Búsqueda de conductores cercanos ─────────────────────────────────────────
 
   private async findNearbyDrivers(trip: Trip): Promise<Driver[]> {
-    const raw = trip.originCoords as unknown as string;
+    // Obtener coords reales desde la BD (TypeORM devuelve hex WKB, no WKT)
+    const row = await this.dataSource.query(
+      `SELECT ST_X(origin_coords::geometry) as lng, ST_Y(origin_coords::geometry) as lat FROM trips WHERE id = $1`,
+      [trip.id],
+    );
+    const lng: number = row[0]?.lng ?? 0;
+    const lat: number = row[0]?.lat ?? 0;
 
-    // Extrae coordenadas del WKT o del objeto GeoJSON según cómo las devuelva TypeORM
-    let lat: number;
-    let lng: number;
-
-    if (typeof raw === 'string' && raw.startsWith('POINT')) {
-      // Formato WKT: "POINT(lng lat)"
-      const match = raw.match(/POINT\(([^ ]+) ([^ )]+)\)/);
-      lng = parseFloat(match![1]);
-      lat = parseFloat(match![2]);
-    } else {
-      // Asume que ya tenemos los valores del DTO originales guardados en el trip
-      const coords = raw as any;
-      lng = coords?.coordinates?.[0] ?? 0;
-      lat = coords?.coordinates?.[1] ?? 0;
-    }
+    this.logger.log(`Buscando conductores cerca de lat=${lat} lng=${lng} radio=${MAX_RADIUS_M}m`);
 
     const candidates = await this.driverRepository
       .createQueryBuilder('driver')
