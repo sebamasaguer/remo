@@ -17,6 +17,7 @@ import { RatingsModule } from './modules/ratings/ratings.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { UsersModule } from './modules/users/users.module';
 import { RemeserasModule } from './modules/remiseras/remiseras.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 import { User } from './modules/users/entities/user.entity';
 import { Driver } from './modules/drivers/entities/driver.entity';
@@ -66,6 +67,7 @@ import { RemeseraAdmin } from './modules/remiseras/entities/remisera-admin.entit
     TripsModule,
     UsersModule,
     RemeserasModule,
+    AdminModule,
     RatingsModule,
     PaymentsModule,
   ],
