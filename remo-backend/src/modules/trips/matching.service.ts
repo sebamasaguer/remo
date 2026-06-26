@@ -6,6 +6,7 @@ import { REDIS_CLIENT } from '../../redis/redis.module';
 import { Trip, TripStatus } from './entities/trip.entity';
 import { Driver, ApprovalStatus } from '../drivers/entities/driver.entity';
 import { AppGateway } from '../../gateway/app.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const OFFER_TTL = 15;
 const MAX_RADIUS_M = 5000;
@@ -28,6 +29,7 @@ export class MatchingService {
 
     private gateway: AppGateway,
     private dataSource: DataSource,
+    private notifications: NotificationsService,
   ) {
     // Registra este servicio en el gateway para manejar accept/reject
     this.gateway.setMatchingService(this);
@@ -136,6 +138,19 @@ export class MatchingService {
       expiresInSeconds: OFFER_TTL,
     });
 
+    // Push FCM para conductores con la app en background
+    void this.notifications.notifyTripOffer(driver.user.fcmToken, {
+      tripId: trip.id,
+      passengerName: trip.passenger.name,
+      passengerRating: Number(trip.passenger.ratingAvg),
+      originAddress: trip.originAddress,
+      destinationAddress: trip.destinationAddress,
+      estimatedPrice: Number(trip.estimatedPrice),
+      paymentMethod: trip.paymentMethod,
+      etaToPassengerMin: eta,
+      expiresInSeconds: OFFER_TTL,
+    });
+
     const response = await this.waitForResponse(trip.id, driver.id);
 
     if (response === 'accepted') {
@@ -227,6 +242,18 @@ export class MatchingService {
       etaMinutes: eta,
     });
 
+    // Push FCM al pasajero (app puede estar en background esperando conductor)
+    void this.notifications.notifyTripAssigned(trip.passenger.fcmToken, {
+      tripId: trip.id,
+      driverName: driver.user.name,
+      driverRating: Number(driver.user.ratingAvg),
+      plate: driver.vehicle.plate,
+      vehicleBrand: driver.vehicle.brand,
+      vehicleModel: driver.vehicle.model,
+      vehicleColor: driver.vehicle.color,
+      etaMinutes: eta,
+    });
+
     this.logger.log(`Viaje ${trip.id} asignado al conductor ${driver.id}`);
   }
 
@@ -244,6 +271,12 @@ export class MatchingService {
       tripId: trip.id,
       reason: 'no_drivers_available',
     });
+
+    void this.notifications.notifyTripCancelled(
+      trip.passenger?.fcmToken,
+      trip.id,
+      'no_drivers_available',
+    );
 
     this.logger.warn(`Viaje ${trip.id} cancelado: sin conductores`);
   }

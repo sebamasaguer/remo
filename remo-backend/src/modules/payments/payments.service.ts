@@ -12,6 +12,7 @@ import { Remisera } from '../remiseras/entities/remisera.entity';
 import { FaresService } from '../fares/fares.service';
 import { MercadoPagoService } from './mercadopago.service';
 import { AppGateway } from '../../gateway/app.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PaymentsService {
@@ -30,6 +31,7 @@ export class PaymentsService {
     private faresService: FaresService,
     private mpService: MercadoPagoService,
     private gateway: AppGateway,
+    private notifications: NotificationsService,
   ) {}
 
   // ─── Se llama al completar el viaje ──────────────────────────────────────────
@@ -98,11 +100,18 @@ export class PaymentsService {
       paidAt: new Date(),
     });
 
-    const trip = await this.tripRepository.findOne({ where: { id: tripId } });
+    const trip = await this.tripRepository.findOne({
+      where: { id: tripId },
+      relations: ['passenger', 'driver', 'driver.user'],
+    });
 
     if (trip) {
       this.gateway.emitToUser(trip.passengerId, 'payment:confirmed', { tripId, method: 'cash' });
       this.gateway.emitToUser(trip.driverId!, 'payment:confirmed', { tripId, method: 'cash' });
+
+      const amount = payment.amount ? Number(payment.amount) : 0;
+      void this.notifications.notifyPaymentConfirmed(trip.passenger?.fcmToken, tripId, 'cash', amount);
+      void this.notifications.notifyPaymentConfirmed(trip.driver?.user?.fcmToken, tripId, 'cash', amount);
     }
 
     return this.findByTrip(tripId);
@@ -135,11 +144,19 @@ export class PaymentsService {
       paidAt: mpPayment.status === 'approved' ? new Date() : undefined,
     });
 
-    const trip = await this.tripRepository.findOne({ where: { id: tripId } });
+    const trip = await this.tripRepository.findOne({
+      where: { id: tripId },
+      relations: ['passenger', 'driver', 'driver.user'],
+    });
 
     if (trip && mpPayment.status === 'approved') {
       this.gateway.emitToUser(trip.passengerId, 'payment:confirmed', { tripId, method: 'mercado_pago' });
       this.gateway.emitToUser(trip.driverId!, 'payment:confirmed', { tripId, method: 'mercado_pago' });
+
+      const updatedPayment = await this.findByTrip(tripId);
+      const amount = updatedPayment.amount ? Number(updatedPayment.amount) : 0;
+      void this.notifications.notifyPaymentConfirmed(trip.passenger?.fcmToken, tripId, 'mercado_pago', amount);
+      void this.notifications.notifyPaymentConfirmed(trip.driver?.user?.fcmToken, tripId, 'mercado_pago', amount);
     }
 
     this.logger.log(`Webhook MP procesado: viaje ${tripId} → ${mpPayment.status}`);

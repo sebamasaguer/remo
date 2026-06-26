@@ -4,12 +4,14 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Driver } from '../../drivers/entities/driver.entity';
 import { Vehicle } from '../../drivers/entities/vehicle.entity';
 import { Remisera } from '../../remiseras/entities/remisera.entity';
+import { TripLocation } from './trip-location.entity';
 
 export enum TripStatus {
   REQUESTED = 'requested',
@@ -136,6 +138,9 @@ export class Trip {
 
   @Column({ name: 'cancellation_reason', nullable: true })
   cancellationReason: string;
+
+  @OneToMany(() => TripLocation, (loc) => loc.trip)
+  locations: TripLocation[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
