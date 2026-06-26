@@ -7,6 +7,7 @@ import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import firebaseConfig from './config/firebase.config';
+import storageConfig from './config/storage.config';
 
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -20,6 +21,7 @@ import { UsersModule } from './modules/users/users.module';
 import { RemeserasModule } from './modules/remiseras/remiseras.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 
 import { User } from './modules/users/entities/user.entity';
 import { Driver } from './modules/drivers/entities/driver.entity';
@@ -38,7 +40,7 @@ import { RemeseraAdmin } from './modules/remiseras/entities/remisera-admin.entit
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig, redisConfig, firebaseConfig],
+      load: [appConfig, databaseConfig, jwtConfig, redisConfig, firebaseConfig, storageConfig],
     }),
 
     TypeOrmModule.forRootAsync({
@@ -71,6 +73,7 @@ import { RemeseraAdmin } from './modules/remiseras/entities/remisera-admin.entit
     UsersModule,
     RemeserasModule,
     AdminModule,
+    UploadsModule,
     RatingsModule,
     PaymentsModule,
   ],
