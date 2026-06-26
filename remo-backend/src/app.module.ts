@@ -15,6 +15,8 @@ import { FaresModule } from './modules/fares/fares.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { RatingsModule } from './modules/ratings/ratings.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { UsersModule } from './modules/users/users.module';
+import { RemeserasModule } from './modules/remiseras/remiseras.module';
 
 import { User } from './modules/users/entities/user.entity';
 import { Driver } from './modules/drivers/entities/driver.entity';
@@ -26,6 +28,8 @@ import { TripLocation } from './modules/trips/entities/trip-location.entity';
 import { FareConfig } from './modules/fares/entities/fare-config.entity';
 import { Rating } from './modules/ratings/entities/rating.entity';
 import { Payment } from './modules/payments/entities/payment.entity';
+import { EmergencyContact } from './modules/users/entities/emergency-contact.entity';
+import { RemeseraAdmin } from './modules/remiseras/entities/remisera-admin.entity';
 
 @Module({
   imports: [
@@ -47,6 +51,7 @@ import { Payment } from './modules/payments/entities/payment.entity';
           User, Driver, Vehicle, DriverDocument,
           Remisera, Trip, TripLocation, FareConfig,
           Rating, Payment,
+          EmergencyContact, RemeseraAdmin,
         ],
         synchronize: config.get('app.nodeEnv') === 'development',
         logging: config.get('app.nodeEnv') === 'development',
@@ -59,6 +64,8 @@ import { Payment } from './modules/payments/entities/payment.entity';
     DriversModule,
     FaresModule,
     TripsModule,
+    UsersModule,
+    RemeserasModule,
     RatingsModule,
     PaymentsModule,
   ],
