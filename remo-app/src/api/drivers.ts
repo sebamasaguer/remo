@@ -37,7 +37,8 @@ export const getEarnings = (period: 'day' | 'week' | 'month' = 'day') =>
     period: string;
     totalTrips: number;
     totalEarnings: number;
-    trips: any[];
+    cashEarnings: number;
+    digitalEarnings: number;
   }>('/drivers/me/earnings', { params: { period } });
 
 export const completeTrip = (tripId: string) =>
