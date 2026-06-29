@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TouchableOpacity, Alert, Switch, Modal, ActivityIndicator,
+  View, Text, TouchableOpacity, Alert, Switch, Modal,
+  ActivityIndicator, Linking,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -8,11 +9,16 @@ import { useAuthStore } from '@/store/auth.store';
 import { useSocket } from '@/hooks/useSocket';
 import {
   setOnlineStatus, updateLocation, completeTrip, driverArrived, startTrip,
-  getDriverProfile, type ApprovalStatus,
+  getDriverProfile, getEarnings, type ApprovalStatus,
 } from '@/api/drivers';
 import { COLORS } from '@/constants';
 
 type DriverStatus = 'offline' | 'online' | 'offer' | 'assigned' | 'arriving' | 'in_progress';
+
+const openMaps = (address: string) => {
+  const q = encodeURIComponent(address);
+  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`).catch(() => {});
+};
 
 export default function DriverHome() {
   const { user } = useAuthStore();
@@ -30,6 +36,9 @@ export default function DriverHome() {
   const [offerTimer, setOfferTimer] = useState(15);
   const offerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const [todayEarnings, setTodayEarnings] = useState(0);
+  const [todayTrips, setTodayTrips] = useState(0);
+
   const socket = useSocket();
 
   useEffect(() => {
@@ -37,12 +46,19 @@ export default function DriverHome() {
       .then(({ data }) => {
         setApprovalStatus(data.approvalStatus);
         setRejectionReason(data.rejectionReason);
+        if (data.approvalStatus === 'approved') {
+          getEarnings('day')
+            .then(({ data: e }) => {
+              setTodayEarnings(e.totalEarnings);
+              setTodayTrips(e.totalTrips);
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => {})
       .finally(() => setLoadingProfile(false));
   }, []);
 
-  // Obtener ubicación
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -52,7 +68,6 @@ export default function DriverHome() {
     })();
   }, []);
 
-  // Eventos WebSocket del conductor
   useEffect(() => {
     if (!socket) return;
 
@@ -109,7 +124,6 @@ export default function DriverHome() {
       setDriverStatus(value ? 'online' : 'offline');
 
       if (value && location) {
-        // Empezar a enviar ubicación cada 5 segundos
         locationInterval.current = setInterval(async () => {
           const loc = await Location.getCurrentPositionAsync({});
           setLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
@@ -157,11 +171,16 @@ export default function DriverHome() {
     if (!activeTrip) return;
     try {
       await completeTrip(activeTrip.tripId);
+      const fare = activeTrip.estimatedPrice ?? 0;
+      setTodayEarnings((e) => e + fare);
+      setTodayTrips((t) => t + 1);
       setActiveTrip(null);
       setDriverStatus('online');
-      Alert.alert('¡Viaje completado!', 'El pago se procesará a la brevedad.');
+      Alert.alert('¡Viaje completado!', `Ganaste $${fare.toFixed(2)}`);
     } catch { }
   };
+
+  // ── Estados de aprobación ───────────────────────────────────────────────────
 
   if (loadingProfile) {
     return (
@@ -223,6 +242,11 @@ export default function DriverHome() {
     );
   }
 
+  // ── Pantalla principal (approved) ───────────────────────────────────────────
+
+  const isOnline = driverStatus !== 'offline';
+  const isBusy = driverStatus === 'offer' || driverStatus === 'in_progress' || driverStatus === 'assigned' || driverStatus === 'arriving';
+
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
       {/* Mapa */}
@@ -238,26 +262,46 @@ export default function DriverHome() {
         }
       />
 
-      {/* Header con estado */}
+      {/* Header */}
       <View style={{
         position: 'absolute', top: 56, left: 16, right: 16,
-        backgroundColor: COLORS.white, borderRadius: 16, padding: 16,
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        elevation: 6, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8,
+        backgroundColor: COLORS.white, borderRadius: 16,
+        paddingHorizontal: 16, paddingVertical: 12,
+        flexDirection: 'row', alignItems: 'center',
+        elevation: 6, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8,
       }}>
-        <View>
-          <Text style={{ fontWeight: '700', fontSize: 16, color: COLORS.text }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontWeight: '700', fontSize: 15, color: COLORS.text }}>
             {user?.name?.split(' ')[0] ?? 'Conductor'}
           </Text>
-          <Text style={{ fontSize: 13, color: driverStatus === 'offline' ? COLORS.muted : COLORS.success }}>
-            {driverStatus === 'offline' ? '● Desconectado' : '● En línea'}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+            <View style={{
+              width: 7, height: 7, borderRadius: 4,
+              backgroundColor: isOnline ? COLORS.success : COLORS.muted,
+              marginRight: 5,
+            }} />
+            <Text style={{ fontSize: 12, color: isOnline ? COLORS.success : COLORS.muted }}>
+              {isOnline ? 'En línea' : 'Desconectado'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Ganancias hoy */}
+        <View style={{ alignItems: 'flex-end', marginRight: 16 }}>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text }}>
+            ${todayEarnings.toFixed(2)}
+          </Text>
+          <Text style={{ fontSize: 11, color: COLORS.muted }}>
+            {todayTrips} viaje{todayTrips !== 1 ? 's' : ''} hoy
           </Text>
         </View>
+
         <Switch
-          value={driverStatus !== 'offline'}
+          value={isOnline}
           onValueChange={toggleOnline}
           trackColor={{ false: COLORS.border, true: COLORS.primary }}
-          disabled={driverStatus === 'offer' || driverStatus === 'in_progress'}
+          thumbColor={COLORS.white}
+          disabled={isBusy}
         />
       </View>
 
@@ -266,75 +310,218 @@ export default function DriverHome() {
         position: 'absolute', bottom: 0, left: 0, right: 0,
         backgroundColor: COLORS.white,
         borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        padding: 24, elevation: 10,
+        paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24,
+        elevation: 12,
+        shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 12,
       }}>
-        {/* Offline */}
+        {/* Handle */}
+        <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: COLORS.border, alignSelf: 'center', marginBottom: 16 }} />
+
+        {/* ── Offline ── */}
         {driverStatus === 'offline' && (
-          <View style={{ alignItems: 'center', paddingVertical: 8 }}>
-            <Text style={{ fontSize: 40, marginBottom: 8 }}>😴</Text>
-            <Text style={{ fontSize: 16, color: COLORS.textLight }}>
-              Activá el switch para recibir viajes
-            </Text>
-          </View>
-        )}
-
-        {/* Online esperando */}
-        {driverStatus === 'online' && (
-          <View style={{ alignItems: 'center', paddingVertical: 8 }}>
-            <ActivityIndicator color={COLORS.primary} style={{ marginBottom: 8 }} />
-            <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.text }}>
-              Esperando solicitudes...
-            </Text>
-          </View>
-        )}
-
-        {/* Viaje asignado */}
-        {(driverStatus === 'assigned' || driverStatus === 'arriving') && activeTrip && (
           <View>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 16 }}>
-              {driverStatus === 'arriving' ? '📍 Indicá que llegaste' : '✅ Viaje asignado'}
-            </Text>
-            <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 14, marginBottom: 16 }}>
-              <Text style={{ fontWeight: '700', color: COLORS.text, marginBottom: 4 }}>
-                {activeTrip.passenger?.name ?? 'Pasajero'}
-              </Text>
-              <Text style={{ color: COLORS.textLight, fontSize: 13 }}>📍 {activeTrip.originAddress}</Text>
-              <Text style={{ color: COLORS.textLight, fontSize: 13 }}>🏁 {activeTrip.destinationAddress}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <View style={{
+                flex: 1, backgroundColor: COLORS.surface, borderRadius: 12,
+                padding: 14, marginRight: 8, alignItems: 'center',
+              }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.text }}>
+                  ${todayEarnings.toFixed(2)}
+                </Text>
+                <Text style={{ fontSize: 11, color: COLORS.muted, marginTop: 2 }}>Ganado hoy</Text>
+              </View>
+              <View style={{
+                flex: 1, backgroundColor: COLORS.surface, borderRadius: 12,
+                padding: 14, marginLeft: 8, alignItems: 'center',
+              }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.text }}>{todayTrips}</Text>
+                <Text style={{ fontSize: 11, color: COLORS.muted, marginTop: 2 }}>
+                  Viaje{todayTrips !== 1 ? 's' : ''} hoy
+                </Text>
+              </View>
             </View>
-            {driverStatus === 'assigned' && (
-              <TouchableOpacity
-                onPress={handleArrived}
-                style={{ backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Llegué al pasajero</Text>
-              </TouchableOpacity>
-            )}
-            {driverStatus === 'arriving' && (
-              <TouchableOpacity
-                onPress={handleStart}
-                style={{ backgroundColor: COLORS.success, borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
-              >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Iniciar viaje</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* En progreso */}
-        {driverStatus === 'in_progress' && activeTrip && (
-          <View>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 12 }}>
-              🚗 Viaje en curso
-            </Text>
-            <Text style={{ color: COLORS.textLight, marginBottom: 20 }}>
-              🏁 {activeTrip.destinationAddress}
+            <Text style={{ fontSize: 14, color: COLORS.textLight, textAlign: 'center', marginBottom: 16 }}>
+              Activá el switch para empezar a recibir viajes
             </Text>
             <TouchableOpacity
-              onPress={handleComplete}
+              onPress={() => toggleOnline(true)}
+              style={{ backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 15, alignItems: 'center' }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Conectarme</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Online esperando ── */}
+        {driverStatus === 'online' && (
+          <View style={{ alignItems: 'center', paddingVertical: 8 }}>
+            <ActivityIndicator color={COLORS.primary} size="large" style={{ marginBottom: 12 }} />
+            <Text style={{ fontSize: 17, fontWeight: '700', color: COLORS.text, marginBottom: 4 }}>
+              Buscando viajes...
+            </Text>
+            <Text style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 20 }}>
+              Te avisaremos cuando llegue una solicitud
+            </Text>
+            <TouchableOpacity
+              onPress={() => toggleOnline(false)}
+              style={{
+                borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12,
+                paddingVertical: 12, paddingHorizontal: 24,
+              }}
+            >
+              <Text style={{ color: COLORS.textLight, fontWeight: '600' }}>Desconectarme</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── Asignado: ir al pasajero ── */}
+        {driverStatus === 'assigned' && activeTrip && (
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginRight: 8 }} />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>
+                Dirigite al pasajero
+              </Text>
+            </View>
+
+            {/* Info pasajero */}
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 14, padding: 14, marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <View style={{
+                  width: 40, height: 40, borderRadius: 20,
+                  backgroundColor: COLORS.primary + '20', alignItems: 'center', justifyContent: 'center',
+                  marginRight: 10,
+                }}>
+                  <Text style={{ fontSize: 20 }}>👤</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '700', fontSize: 15, color: COLORS.text }}>
+                    {activeTrip.passenger?.name ?? 'Pasajero'}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: COLORS.secondary }}>
+                    ⭐ {activeTrip.passenger?.rating?.toFixed(1) ?? '5.0'}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.text }}>
+                    ${(activeTrip.estimatedPrice ?? 0).toFixed(2)}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: COLORS.muted }}>
+                    {activeTrip.paymentMethod === 'cash' ? '💵 Efectivo' : '📱 Mercado Pago'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                  <Text style={{ fontSize: 14, marginRight: 6 }}>📍</Text>
+                  <Text style={{ flex: 1, fontSize: 13, color: COLORS.textLight }} numberOfLines={2}>
+                    {activeTrip.originAddress}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                  <Text style={{ fontSize: 14, marginRight: 6 }}>🏁</Text>
+                  <Text style={{ flex: 1, fontSize: 13, color: COLORS.textLight }} numberOfLines={2}>
+                    {activeTrip.destinationAddress}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => openMaps(activeTrip.originAddress)}
+                style={{
+                  flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center',
+                  backgroundColor: COLORS.surface, borderWidth: 1.5, borderColor: COLORS.border,
+                  flexDirection: 'row', justifyContent: 'center', gap: 6,
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>🗺</Text>
+                <Text style={{ color: COLORS.text, fontWeight: '600', fontSize: 14 }}>Navegar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleArrived}
+                style={{ flex: 2, borderRadius: 12, paddingVertical: 13, alignItems: 'center', backgroundColor: COLORS.primary }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Llegué al pasajero</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* ── Arriving: esperando que el pasajero suba ── */}
+        {driverStatus === 'arriving' && activeTrip && (
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.secondary, marginRight: 8 }} />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>Esperando al pasajero</Text>
+            </View>
+            <Text style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 14 }}>
+              {activeTrip.passenger?.name ?? 'El pasajero'} fue notificado de tu llegada.
+            </Text>
+
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 12, marginBottom: 14, flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, marginRight: 6 }}>🏁</Text>
+              <Text style={{ flex: 1, fontSize: 13, color: COLORS.textLight }} numberOfLines={2}>
+                {activeTrip.destinationAddress}
+              </Text>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text, marginLeft: 8 }}>
+                ${(activeTrip.estimatedPrice ?? 0).toFixed(2)}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={handleStart}
               style={{ backgroundColor: COLORS.success, borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
             >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Completar viaje</Text>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Iniciar viaje</Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── En progreso ── */}
+        {driverStatus === 'in_progress' && activeTrip && (
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success, marginRight: 8 }} />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.text }}>Viaje en curso</Text>
+            </View>
+
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 14, padding: 14, marginBottom: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <Text style={{ fontSize: 13, color: COLORS.textLight }}>Tarifa estimada</Text>
+                <Text style={{ fontSize: 24, fontWeight: '800', color: COLORS.text }}>
+                  ${(activeTrip.estimatedPrice ?? 0).toFixed(2)}
+                </Text>
+              </View>
+              <View style={{ borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Text style={{ fontSize: 14, marginRight: 6 }}>🏁</Text>
+                <Text style={{ flex: 1, fontSize: 13, color: COLORS.textLight }} numberOfLines={2}>
+                  {activeTrip.destinationAddress}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => openMaps(activeTrip.destinationAddress)}
+                style={{
+                  flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center',
+                  backgroundColor: COLORS.surface, borderWidth: 1.5, borderColor: COLORS.border,
+                  flexDirection: 'row', justifyContent: 'center', gap: 6,
+                }}
+              >
+                <Text style={{ fontSize: 16 }}>🗺</Text>
+                <Text style={{ color: COLORS.text, fontWeight: '600', fontSize: 14 }}>Navegar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleComplete}
+                style={{ flex: 2, borderRadius: 12, paddingVertical: 13, alignItems: 'center', backgroundColor: COLORS.success }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Completar viaje</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -342,39 +529,64 @@ export default function DriverHome() {
       {/* Modal oferta de viaje */}
       <Modal visible={driverStatus === 'offer' && !!pendingOffer} transparent animationType="slide">
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <View style={{ backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <View style={{
+            backgroundColor: COLORS.white,
+            borderTopLeftRadius: 28, borderTopRightRadius: 28,
+            padding: 24,
+          }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.text }}>Nueva solicitud</Text>
               <View style={{
-                width: 44, height: 44, borderRadius: 22,
+                width: 48, height: 48, borderRadius: 24,
                 backgroundColor: offerTimer <= 5 ? '#FEF2F2' : '#EEF2FF',
                 alignItems: 'center', justifyContent: 'center',
               }}>
-                <Text style={{ fontWeight: '800', color: offerTimer <= 5 ? COLORS.danger : COLORS.primary }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: offerTimer <= 5 ? COLORS.danger : COLORS.primary }}>
                   {offerTimer}
                 </Text>
               </View>
             </View>
 
-            <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 16, marginBottom: 20 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-                <Text style={{ color: COLORS.textLight, fontSize: 13 }}>Pasajero</Text>
-                <Text style={{ fontWeight: '700', color: COLORS.text }}>
-                  {pendingOffer?.passenger?.name ?? '—'} ⭐{pendingOffer?.passenger?.rating?.toFixed(1) ?? '5.0'}
+            {/* Info pasajero */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+              <View style={{
+                width: 44, height: 44, borderRadius: 22,
+                backgroundColor: COLORS.primary + '15',
+                alignItems: 'center', justifyContent: 'center', marginRight: 10,
+              }}>
+                <Text style={{ fontSize: 22 }}>👤</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', fontSize: 15, color: COLORS.text }}>
+                  {pendingOffer?.passenger?.name ?? 'Pasajero'}
+                </Text>
+                <Text style={{ fontSize: 13, color: COLORS.secondary }}>
+                  ⭐ {pendingOffer?.passenger?.rating?.toFixed(1) ?? '5.0'}
                 </Text>
               </View>
-              <Text style={{ color: COLORS.textLight, fontSize: 13, marginBottom: 4 }}>
-                📍 {pendingOffer?.originAddress}
-              </Text>
-              <Text style={{ color: COLORS.textLight, fontSize: 13, marginBottom: 12 }}>
-                🏁 {pendingOffer?.destinationAddress}
-              </Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ color: COLORS.textLight, fontSize: 13 }}>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: 26, fontWeight: '800', color: COLORS.text }}>
+                  ${(pendingOffer?.estimatedPrice ?? 0).toFixed(2)}
+                </Text>
+                <Text style={{ fontSize: 12, color: COLORS.muted }}>
                   {pendingOffer?.paymentMethod === 'cash' ? '💵 Efectivo' : '📱 Mercado Pago'}
                 </Text>
-                <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.text }}>
-                  ${pendingOffer?.estimatedPrice?.toFixed(2) ?? '—'}
+              </View>
+            </View>
+
+            {/* Ruta */}
+            <View style={{ backgroundColor: COLORS.surface, borderRadius: 14, padding: 14, marginBottom: 20, gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Text style={{ fontSize: 14, marginRight: 8 }}>📍</Text>
+                <Text style={{ flex: 1, fontSize: 13, color: COLORS.textLight }} numberOfLines={2}>
+                  {pendingOffer?.originAddress}
+                </Text>
+              </View>
+              <View style={{ height: 1, backgroundColor: COLORS.border, marginLeft: 22 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Text style={{ fontSize: 14, marginRight: 8 }}>🏁</Text>
+                <Text style={{ flex: 1, fontSize: 13, color: COLORS.textLight }} numberOfLines={2}>
+                  {pendingOffer?.destinationAddress}
                 </Text>
               </View>
             </View>
@@ -382,15 +594,18 @@ export default function DriverHome() {
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity
                 onPress={handleReject}
-                style={{ flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' }}
+                style={{
+                  flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center',
+                  backgroundColor: '#FEF2F2', borderWidth: 1.5, borderColor: '#FECACA',
+                }}
               >
-                <Text style={{ color: COLORS.danger, fontWeight: '700', fontSize: 16 }}>Rechazar</Text>
+                <Text style={{ color: COLORS.danger, fontWeight: '700', fontSize: 15 }}>Rechazar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleAccept}
-                style={{ flex: 2, borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: COLORS.primary }}
+                style={{ flex: 2, borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: COLORS.primary }}
               >
-                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Aceptar viaje</Text>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Aceptar viaje</Text>
               </TouchableOpacity>
             </View>
           </View>
