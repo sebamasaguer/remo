@@ -1,5 +1,31 @@
 import api from './client';
 
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
+
+export interface DriverProfile {
+  id: string;
+  approvalStatus: ApprovalStatus;
+  type: 'independent' | 'remisera';
+  rejectionReason?: string;
+  vehicle: { plate: string; brand: string; model: string; year: number; color: string };
+}
+
+export const registerDriver = (data: {
+  type: 'independent' | 'remisera';
+  remiseraId?: string;
+  plate: string;
+  brand: string;
+  model: string;
+  year: string;
+  color: string;
+}) => api.post<DriverProfile>('/drivers/register', data);
+
+export const getRemiseras = () =>
+  api.get<{ id: string; name: string }[]>('/remiseras');
+
+export const getDriverProfile = () =>
+  api.get<DriverProfile>('/drivers/me');
+
 export const updateLocation = (lat: number, lng: number) =>
   api.post('/drivers/me/location', { lat, lng });
 

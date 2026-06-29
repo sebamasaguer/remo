@@ -71,6 +71,27 @@ export default function ProfileScreen() {
             <Text style={{ color: COLORS.muted }}>›</Text>
           </TouchableOpacity>
         ))}
+
+        {/* Registrarse como conductor */}
+        <TouchableOpacity
+          onPress={() => router.push('/(auth)/register-driver')}
+          style={{
+            flexDirection: 'row', alignItems: 'center',
+            backgroundColor: '#EEF2FF', padding: 16, borderRadius: 12,
+            marginTop: 8, borderWidth: 1.5, borderColor: COLORS.primary,
+          }}
+        >
+          <Text style={{ fontSize: 20, marginRight: 12 }}>🚗</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, color: COLORS.primary, fontWeight: '700' }}>
+              Quiero ser conductor
+            </Text>
+            <Text style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>
+              Registrá tu vehículo y empezá a ganar
+            </Text>
+          </View>
+          <Text style={{ color: COLORS.primary }}>›</Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity

@@ -1,12 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, Alert, Switch, Modal, ActivityIndicator,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useAuthStore } from '@/store/auth.store';
 import { useSocket } from '@/hooks/useSocket';
-import { setOnlineStatus, updateLocation, completeTrip, driverArrived, startTrip } from '@/api/drivers';
+import {
+  setOnlineStatus, updateLocation, completeTrip, driverArrived, startTrip,
+  getDriverProfile, type ApprovalStatus,
+} from '@/api/drivers';
 import { COLORS } from '@/constants';
 
 type DriverStatus = 'offline' | 'online' | 'offer' | 'assigned' | 'arriving' | 'in_progress';
@@ -16,6 +19,10 @@ export default function DriverHome() {
   const mapRef = useRef<MapView>(null);
   const locationInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string | undefined>();
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [driverStatus, setDriverStatus] = useState<DriverStatus>('offline');
   const [pendingOffer, setPendingOffer] = useState<any>(null);
@@ -24,6 +31,16 @@ export default function DriverHome() {
   const offerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const socket = useSocket();
+
+  useEffect(() => {
+    getDriverProfile()
+      .then(({ data }) => {
+        setApprovalStatus(data.approvalStatus);
+        setRejectionReason(data.rejectionReason);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingProfile(false));
+  }, []);
 
   // Obtener ubicación
   useEffect(() => {
@@ -145,6 +162,66 @@ export default function DriverHome() {
       Alert.alert('¡Viaje completado!', 'El pago se procesará a la brevedad.');
     } catch { }
   };
+
+  if (loadingProfile) {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
+  if (approvalStatus === 'pending') {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+        <Text style={{ fontSize: 64, marginBottom: 24 }}>⏳</Text>
+        <Text style={{ fontSize: 22, fontWeight: '800', color: COLORS.text, marginBottom: 12, textAlign: 'center' }}>
+          Solicitud en revisión
+        </Text>
+        <Text style={{ fontSize: 15, color: COLORS.textLight, textAlign: 'center', lineHeight: 22 }}>
+          Tu registro está siendo revisado por el equipo de REMO. Te avisaremos por notificación cuando sea aprobado.
+        </Text>
+      </View>
+    );
+  }
+
+  if (approvalStatus === 'rejected') {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+        <Text style={{ fontSize: 64, marginBottom: 24 }}>❌</Text>
+        <Text style={{ fontSize: 22, fontWeight: '800', color: COLORS.text, marginBottom: 12, textAlign: 'center' }}>
+          Solicitud rechazada
+        </Text>
+        {rejectionReason && (
+          <View style={{ backgroundColor: '#FEF2F2', borderRadius: 12, padding: 16, marginBottom: 16, width: '100%' }}>
+            <Text style={{ fontSize: 14, color: COLORS.danger, lineHeight: 20 }}>{rejectionReason}</Text>
+          </View>
+        )}
+        <Text style={{ fontSize: 14, color: COLORS.textLight, textAlign: 'center' }}>
+          Contactá con soporte para más información.
+        </Text>
+      </View>
+    );
+  }
+
+  if (approvalStatus === 'suspended') {
+    return (
+      <View style={{ flex: 1, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+        <Text style={{ fontSize: 64, marginBottom: 24 }}>🚫</Text>
+        <Text style={{ fontSize: 22, fontWeight: '800', color: COLORS.text, marginBottom: 12, textAlign: 'center' }}>
+          Cuenta suspendida
+        </Text>
+        {rejectionReason && (
+          <View style={{ backgroundColor: '#FEF2F2', borderRadius: 12, padding: 16, marginBottom: 16, width: '100%' }}>
+            <Text style={{ fontSize: 14, color: COLORS.danger, lineHeight: 20 }}>{rejectionReason}</Text>
+          </View>
+        )}
+        <Text style={{ fontSize: 14, color: COLORS.textLight, textAlign: 'center' }}>
+          Contactá con soporte para más información.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
